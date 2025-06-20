@@ -13,15 +13,14 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://192.168.1.13:5173',
-  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
-  'https://coffee-ordering-frontend-production.up.railway.app'
+  process.env.CLIENT_URL || 'http://localhost:5173',
+  /^https:\/\/coffee-ordering-frontend-production\.up\.railway\.app$/
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -38,11 +37,11 @@ app.use(cors(corsOptions));
 const io = new Server(server, { cors: corsOptions });
 
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || 'mysql.railway.internal',
+  port: process.env.DB_PORT || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'railway',
   clearExpired: true,
   checkExpirationInterval: 900000,
   expiration: 86400000,
@@ -55,7 +54,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
     key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || 'your_secret_key',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
