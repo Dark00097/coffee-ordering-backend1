@@ -5,7 +5,6 @@ const logger = require('../logger');
 let pool;
 
 async function createPoolWithRetry(retries = 5, delay = 3000) {
-  // Try internal host first
   const hosts = [
     {
       host: process.env.DB_HOST || 'mysql.railway.internal',
@@ -20,7 +19,8 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
   ];
 
   for (const { host, port, type } of hosts) {
-    for (let i = 0; i < retries; i++) {
+    logger.info(`Attempting connection to ${type} host`, { host, port });
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         pool = mysql.createPool({
           host,
@@ -48,10 +48,10 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
           port,
           user: process.env.DB_USER,
           database: process.env.DB_NAME,
-          attempt: i + 1,
+          attempt,
         });
-        if (i < retries - 1) {
-          logger.info(`Retrying connection in ${delay}ms...`);
+        if (attempt < retries) {
+          logger.info(`Retrying connection to ${type} host in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
