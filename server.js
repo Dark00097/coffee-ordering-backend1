@@ -58,6 +58,7 @@ const sessionStore = new MySQLStore({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/Uploads', express.static(path.join(__dirname, 'Uploads'))); // Serve product images
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(
@@ -84,6 +85,14 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
   });
+  next();
+});
+
+// Add middleware to log session updates without affecting authRoutes
+app.use((req, res, next) => {
+  if (req.session && req.session.user) {
+    logger.info('Session updated', { sessionID: req.sessionID, user: req.session.user });
+  }
   next();
 });
 
@@ -193,17 +202,19 @@ io.on('connection', (socket) => {
       const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
       if (sessionData.length > 0 && sessionData[0].data) {
         const session = JSON.parse(sessionData[0].data);
+        logger.info('Parsed session data', { sessionId, session }); // Debug session content
         if (session && session.user && ['admin', 'server'].includes(session.user.role)) {
           socket.join('staff-notifications');
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
         } else {
-          logger.warn('Session or user data missing', { sessionId, sessionData: sessionData[0].data });
+          logger.warn('Session or user data missing or invalid role', { sessionId, session });
         }
       } else {
         logger.warn('No session data found', { sessionId });
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
+      socket.emit('session-error', { message: 'Session validation failed' }); // Notify frontend
     }
   });
 
