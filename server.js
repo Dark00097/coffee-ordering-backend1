@@ -56,6 +56,10 @@ const sessionStore = new MySQLStore({
   expiration: 86400000,
 });
 
+// Log session store initialization
+sessionStore.on('ready', () => logger.info('Session store ready'));
+sessionStore.on('error', (error) => logger.error('Session store error', { error: error.message }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/Uploads', express.static(path.join(__dirname, 'Uploads'))); // Serve product images
@@ -88,7 +92,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add middleware to log session updates without affecting authRoutes
+// Add session endpoint for socket.js
+app.get('/api/session', (req, res) => {
+  if (!req.sessionID) {
+    logger.warn('No session ID available');
+    return res.status(401).json({ error: 'No active session' });
+  }
+  logger.info('Session ID returned', { sessionId: req.sessionID });
+  res.json({ sessionId: req.sessionID });
+});
+
+// Add middleware to log session updates
 app.use((req, res, next) => {
   if (req.session && req.session.user) {
     logger.info('Session updated', { sessionID: req.sessionID, user: req.session.user });
@@ -202,7 +216,7 @@ io.on('connection', (socket) => {
       const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
       if (sessionData.length > 0 && sessionData[0].data) {
         const session = JSON.parse(sessionData[0].data);
-        logger.info('Parsed session data', { sessionId, session }); // Debug session content
+        logger.info('Parsed session data', { sessionId, session });
         if (session && session.user && ['admin', 'server'].includes(session.user.role)) {
           socket.join('staff-notifications');
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
@@ -211,6 +225,7 @@ io.on('connection', (socket) => {
         }
       } else {
         logger.warn('No session data found', { sessionId });
+        socket.emit('session-error', { message: 'No session data available' }); // Notify frontend
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
