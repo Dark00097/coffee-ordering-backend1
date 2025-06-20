@@ -15,13 +15,13 @@ const server = http.createServer(app);
 const allowedOrigins = [
   'http://localhost:5173',
   'http://192.168.1.13:5173',
-  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/
+  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
+  'https://coffee-ordering-frontend-production.up.railway.app'
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -38,11 +38,11 @@ app.use(cors(corsOptions));
 const io = new Server(server, { cors: corsOptions });
 
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'coffee_ordering',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   clearExpired: true,
   checkExpirationInterval: 900000,
   expiration: 86400000,
@@ -55,7 +55,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
     key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'your_secret_key',
+    secret: process.env.SESSION_SECRET,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -88,7 +88,7 @@ const promotionRoutes = require('./routes/promotionRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
-const breakfastRoutes = require('./routes/breakfastRoutes'); // Added breakfast routes
+const breakfastRoutes = require('./routes/breakfastRoutes');
 
 app.use('/api', authRoutes);
 app.use('/api', menuRoutes);
@@ -98,9 +98,8 @@ app.use('/api', promotionRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', bannerRoutes);
-app.use('/api', breakfastRoutes); // Register breakfast routes
+app.use('/api', breakfastRoutes);
 
-// Apply validations middleware
 app.use('/api', (req, res, next) => {
   if (
     req.method === 'POST' ||
@@ -113,7 +112,7 @@ app.use('/api', (req, res, next) => {
       req.path.includes('/tables') ||
       req.path.includes('/notifications') ||
       req.path.includes('/banners') ||
-      req.path.includes('/breakfasts') // Added breakfasts
+      req.path.includes('/breakfasts')
     ))
   ) {
     if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
