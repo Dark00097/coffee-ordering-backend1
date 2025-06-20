@@ -18,7 +18,8 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
     },
   ];
 
-  for (const { host, port, type } of hosts) {
+  for (let i = 0; i < hosts.length; i++) {
+    const { host, port, type } = hosts[i];
     logger.info(`Starting connection attempts to ${type} host`, { host, port });
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -52,8 +53,8 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
         if (attempt < retries) {
           logger.info(`Retrying ${type} host in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
-        } else if (type === 'internal' && attempt === retries) {
-          logger.info(`Exhausted retries for internal host, moving to next host...`);
+        } else if (i < hosts.length - 1) {
+          logger.info(`Exhausted retries for ${type} host, moving to next host...`);
         }
       }
     }
