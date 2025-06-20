@@ -12,15 +12,18 @@ const validate = require('./middleware/validate');
 const app = express();
 const server = http.createServer(app);
 
+// Ensure CLIENT_URL is split into an array
 const allowedOrigins = [
   ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173']),
-  /^https:\/\/coffee-ordering-frontend-production\.up\.railway\.app$/
 ];
+
+// Debug CORS origins
+console.log('Allowed Origins:', allowedOrigins);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+    if (!origin) return callback(null, true); // Allow requests with no origin (e.g., mobile apps)
+    if (allowedOrigins.some(allowed => allowed === origin)) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -29,12 +32,18 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
 app.use(cors(corsOptions));
 
-const io = new Server(server, { cors: corsOptions });
+// Ensure Socket.IO uses the same CORS settings
+const io = new Server(server, {
+  cors: corsOptions,
+  path: '/socket.io/',
+  serveClient: false,
+});
 
 const sessionStore = new MySQLStore({
   host: process.env.DB_HOST || 'mysql.railway.internal',
@@ -150,6 +159,7 @@ function logRoutes() {
 
 logRoutes();
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   logger.error('Server error', {
     error: err.message,
@@ -159,7 +169,7 @@ app.use((err, req, res, next) => {
     user: req.session.user ? req.session.user.id : 'anonymous',
     origin: req.headers.origin,
   });
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ error: 'Internal server error', details: err.message });
 });
 
 app.use((req, res) => {
