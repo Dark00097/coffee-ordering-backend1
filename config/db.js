@@ -71,24 +71,21 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
   return pool;
 }
 
-try {
-  createPoolWithRetry().catch(err => {
-    logger.error('Error initializing database pool', {
+(async () => {
+  try {
+    pool = await createPoolWithRetry();
+  } catch (err) {
+    logger.error('Failed to initialize database pool', {
       error: err.message,
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       database: process.env.DB_NAME,
     });
     process.exit(1);
-  });
-} catch (err) {
-  logger.error('Error initializing database pool', {
-    error: err.message,
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    database: process.env.DB_NAME,
-  });
-  process.exit(1);
-}
+  }
+})();
 
-module.exports = pool;
+module.exports = {
+  getConnection: () => pool.getConnection(),
+  query: (...args) => pool.query(...args),
+};

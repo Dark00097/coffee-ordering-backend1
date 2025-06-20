@@ -204,7 +204,11 @@ server.listen(PORT, '0.0.0.0', async () => {
     await db.getConnection();
     logger.info(`Server running on port ${PORT}`);
   } catch (error) {
-    logger.error('Failed to connect to database', { error: error.message });
+    logger.error('Failed to start server due to database connection error', {
+      error: error.message,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+    });
     process.exit(1);
   }
 });
