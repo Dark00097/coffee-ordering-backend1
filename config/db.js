@@ -19,7 +19,7 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
   ];
 
   for (const { host, port, type } of hosts) {
-    logger.info(`Attempting connection to ${type} host`, { host, port });
+    logger.info(`Starting connection attempts to ${type} host`, { host, port });
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         pool = mysql.createPool({
@@ -42,17 +42,18 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
         connection.release();
         return pool;
       } catch (err) {
-        logger.error(`Database connection attempt failed via ${type} host`, {
+        logger.error(`Connection attempt ${attempt} failed via ${type} host`, {
           error: err.message,
           host,
           port,
           user: process.env.DB_USER,
           database: process.env.DB_NAME,
-          attempt,
         });
         if (attempt < retries) {
-          logger.info(`Retrying connection to ${type} host in ${delay}ms...`);
+          logger.info(`Retrying ${type} host in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
+        } else if (type === 'internal' && attempt === retries) {
+          logger.info(`Exhausted retries for internal host, moving to next host...`);
         }
       }
     }
