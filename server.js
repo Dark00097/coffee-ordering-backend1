@@ -89,7 +89,22 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
   });
+  // Ensure session is saved after modification
+  if (req.session.user && req.session.isModified) {
+    req.session.save((err) => {
+      if (err) logger.error('Session save error', { error: err.message });
+      else logger.info('Session saved after request', { sessionID: req.sessionID });
+    });
+  }
   next();
+});
+
+// Add this after app.use('/Uploads', ...)
+const uploadsPath = path.join(__dirname, 'Uploads');
+const fs = require('fs');
+fs.access(uploadsPath, fs.constants.F_OK, (err) => {
+  if (err) logger.error('Uploads directory not found', { path: uploadsPath });
+  else logger.info('Uploads directory found', { path: uploadsPath });
 });
 
 // Add session endpoint for socket.js
@@ -222,14 +237,15 @@ io.on('connection', (socket) => {
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
         } else {
           logger.warn('Session or user data missing or invalid role', { sessionId, session });
+          socket.emit('session-error', { message: 'No session data available' });
         }
       } else {
         logger.warn('No session data found', { sessionId });
-        socket.emit('session-error', { message: 'No session data available' }); // Notify frontend
+        socket.emit('session-error', { message: 'No session data available' });
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
-      socket.emit('session-error', { message: 'Session validation failed' }); // Notify frontend
+      socket.emit('session-error', { message: 'Session validation failed' });
     }
   });
 
