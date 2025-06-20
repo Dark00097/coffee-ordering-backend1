@@ -193,7 +193,7 @@ io.on('connection', (socket) => {
       const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
       if (sessionData.length > 0) {
         const session = JSON.parse(sessionData[0].data);
-        if (session.user && ['admin', 'server'].includes(session.user.role)) {
+        if (session && session.user && ['admin', 'server'].includes(session.user.role)) { // Added null checks
           socket.join('staff-notifications');
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
         }
@@ -208,7 +208,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080; // Match Railway's dynamic port
 server.listen(PORT, '0.0.0.0', async () => {
   try {
     await db.getConnection();
