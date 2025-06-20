@@ -23,7 +23,7 @@ console.log('Allowed Origins:', allowedOrigins);
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // Allow requests with no origin (e.g., mobile apps)
-    if (allowedOrigins.some(allowed => allowed === origin)) {
+    if (allowedOrigins.some(allowed => allowed === origin.trim())) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -191,12 +191,16 @@ io.on('connection', (socket) => {
 
     try {
       const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
-      if (sessionData.length > 0) {
+      if (sessionData.length > 0 && sessionData[0].data) {
         const session = JSON.parse(sessionData[0].data);
-        if (session && session.user && ['admin', 'server'].includes(session.user.role)) { // Added null checks
+        if (session && session.user && ['admin', 'server'].includes(session.user.role)) {
           socket.join('staff-notifications');
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
+        } else {
+          logger.warn('Session or user data missing', { sessionId, sessionData: sessionData[0].data });
         }
+      } else {
+        logger.warn('No session data found', { sessionId });
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
