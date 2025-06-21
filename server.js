@@ -1,6 +1,5 @@
 const express = require('express');
 const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -38,31 +37,9 @@ app.use(cors(corsOptions));
 
 const io = new Server(server, { cors: corsOptions });
 
-const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'mysql.railway.internal',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'railway',
-  clearExpired: true,
-  checkExpirationInterval: 900000,
-  expiration: 86400000,
-}, db);
-
-sessionStore.on('connect', () => {
-  logger.info('Session store connected to MySQL');
-});
-sessionStore.on('error', (error) => {
-  logger.error('Session store error', { error: error.message, stack: error.stack });
-});
-sessionStore.on('disconnect', () => {
-  logger.warn('Session store disconnected from MySQL');
-});
-
 const sessionMiddleware = session({
   key: 'session_cookie_name',
   secret: process.env.SESSION_SECRET || 'your_secret_key',
-  store: sessionStore,
   resave: false,
   saveUninitialized: true,
   cookie: {
