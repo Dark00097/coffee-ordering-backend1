@@ -17,7 +17,6 @@ const allowedOrigins = [
   ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']),
 ];
 
-// Debug CORS origins
 console.log('Allowed Origins:', allowedOrigins);
 
 const corsOptions = {
@@ -30,16 +29,15 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
+  credentials: true, // Ensure credentials are included
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'Cookie'],
-  exposedHeaders: ['Set-Cookie', 'Authorization'], // Ensure Set-Cookie is exposed
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  exposedHeaders: ['Set-Cookie', 'Authorization'],
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 
-// Ensure Socket.IO uses the same CORS settings
 const io = new Server(server, {
   cors: corsOptions,
   path: '/socket.io/',
@@ -57,35 +55,32 @@ const sessionStore = new MySQLStore({
   expiration: 86400000,
 });
 
-// Log session store initialization
 sessionStore.on('ready', () => logger.info('Session store ready'));
 sessionStore.on('error', (error) => logger.error('Session store error', { error: error.message }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/Uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve uploads at /Uploads for compatibility
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve uploads at /uploads
-app.use(express.static(path.join(__dirname, 'public'))); // Serve other public files at root
+app.use('/Uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(
   session({
     key: 'session_cookie_name',
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     store: sessionStore,
-    resave: true, // Force save to ensure session persists
+    resave: true,
     saveUninitialized: false,
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production', // Enforce secure cookies in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Must match secure setting
     },
   })
 );
 
-// Middleware to track and enforce session
 app.use((req, res, next) => {
-  const originalSessionId = req.sessionID;
   logger.info('Incoming request', {
     method: req.method,
     url: req.path,
@@ -96,7 +91,6 @@ app.use((req, res, next) => {
     cookieHeader: req.headers['cookie'],
   });
 
-  // Log session ID changes
   if (req.session && req.session.user) {
     logger.info('Active session', {
       sessionID: req.sessionID,
@@ -107,29 +101,18 @@ app.use((req, res, next) => {
     logger.warn('Session exists but user not found', { sessionID: req.sessionID, cookies: req.headers.cookie });
   }
 
-  // Ensure session is saved after modification
   if (req.session && req.session.isModified) {
     req.session.save((err) => {
-      if (err) {
-        logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
-      } else {
+      if (err) logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
+      else {
         logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private'); // Prevent caching
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       }
-    });
-  }
-
-  // Check if session ID changed unexpectedly
-  if (req.sessionID !== originalSessionId) {
-    logger.warn('Session ID changed during request', {
-      original: originalSessionId,
-      new: req.sessionID,
     });
   }
   next();
 });
 
-// Add this after app.use('/uploads', ...)
 const uploadsPath = path.join(__dirname, 'public/uploads');
 const fs = require('fs');
 fs.access(uploadsPath, fs.constants.F_OK, (err) => {
@@ -137,7 +120,6 @@ fs.access(uploadsPath, fs.constants.F_OK, (err) => {
   else logger.info('Uploads directory found', { path: uploadsPath });
 });
 
-// Add session endpoint for socket.js
 app.get('/api/session', (req, res) => {
   if (!req.sessionID) {
     logger.warn('No session ID available');
@@ -147,7 +129,6 @@ app.get('/api/session', (req, res) => {
   res.json({ sessionId: req.sessionID });
 });
 
-// Add middleware to log session updates
 app.use((req, res, next) => {
   if (req.session && req.session.user) {
     logger.info('Session updated', { sessionID: req.sessionID, user: req.session.user });
@@ -155,7 +136,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
 const authRoutes = require('./routes/authRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes')(io);
@@ -227,7 +207,6 @@ function logRoutes() {
 
 logRoutes();
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   logger.error('Server error', {
     error: err.message,
@@ -284,7 +263,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 8080; // Match Railway's dynamic port
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', async () => {
   try {
     await db.getConnection();
