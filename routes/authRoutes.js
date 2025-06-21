@@ -41,9 +41,15 @@ router.post('/login', async (req, res) => {
       logger.warn('Invalid credentials: Password mismatch', { email });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    req.session.user = { id: user.id, email: user.email, role: user.role };
-    logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role });
-    res.json({ message: 'Logged in', user: req.session.user });
+    // Set session for admin or staff roles only
+    if (['admin', 'server'].includes(user.role)) {
+      req.session.user = { id: user.id, email: user.email, role: user.role };
+      logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role });
+      res.json({ message: 'Logged in', user: req.session.user });
+    } else {
+      logger.warn('Login denied: Non-admin/staff role', { email, role: user.role });
+      res.status(403).json({ error: 'Only admin or staff can log in' });
+    }
   } catch (error) {
     logger.error('Error during login', { error: error.message, email });
     res.status(500).json({ error: 'Failed to login' });
