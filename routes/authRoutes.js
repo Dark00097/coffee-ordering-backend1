@@ -47,9 +47,17 @@ router.post('/login', async (req, res) => {
       req.session.user = { id: user.id, email: user.email, role: user.role };
       req.session.save((err) => {
         if (err) {
-          logger.error('Error saving session', { error: err.message, email });
+          logger.error('Error saving session to store', { error: err.message, email, sessionID: req.sessionID });
           return res.status(500).json({ error: 'Failed to login' });
         }
+        // Verify session in database
+        db.query('SELECT data FROM sessions WHERE session_id = ?', [req.sessionID], (err, result) => {
+          if (err) {
+            logger.error('Error querying session from database', { error: err.message, sessionID: req.sessionID });
+          } else {
+            logger.debug('Session data in database', { sessionID: req.sessionID, data: result.length > 0 ? result[0].data : 'Not found' });
+          }
+        });
         logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role, sessionID: req.sessionID });
         logger.debug('Set-Cookie header for login', { setCookie: res.getHeader('Set-Cookie') || 'No Set-Cookie header' });
         res.json({ message: 'Logged in', user: req.session.user });

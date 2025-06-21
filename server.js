@@ -49,8 +49,14 @@ const sessionStore = new MySQLStore({
   expiration: 86400000,
 }, db);
 
+sessionStore.on('connect', () => {
+  logger.info('Session store connected to MySQL');
+});
 sessionStore.on('error', (error) => {
-  logger.error('Session store error', { error: error.message });
+  logger.error('Session store error', { error: error.message, stack: error.stack });
+});
+sessionStore.on('disconnect', () => {
+  logger.warn('Session store disconnected from MySQL');
 });
 
 const sessionMiddleware = session({
@@ -58,7 +64,7 @@ const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   store: sessionStore,
   resave: false,
-  saveUninitialized: true, // Force cookie for all sessions
+  saveUninitialized: true,
   cookie: {
     maxAge: 86400000,
     httpOnly: true,
@@ -81,6 +87,8 @@ app.use((req, res, next) => {
     const setCookie = res.getHeader('Set-Cookie');
     if (setCookie) {
       logger.debug('Set-Cookie header sent', { setCookie });
+    } else {
+      logger.warn('No Set-Cookie header sent', { sessionID: req.sessionID });
     }
     return originalEnd.apply(res, args);
   };
