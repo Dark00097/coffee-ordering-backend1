@@ -62,8 +62,9 @@ sessionStore.on('error', (error) => logger.error('Session store error', { error:
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/Uploads', express.static(path.join(__dirname, 'Uploads'))); // Serve product images
-app.use(express.static(path.join(__dirname, 'public')));
+app.use('/Uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve uploads at /Uploads for compatibility
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve uploads at /uploads
+app.use(express.static(path.join(__dirname, 'public'))); // Serve other public files at root
 
 app.use(
   session({
@@ -99,8 +100,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add this after app.use('/Uploads', ...)
-const uploadsPath = path.join(__dirname, 'Uploads');
+// Add this after app.use('/uploads', ...)
+const uploadsPath = path.join(__dirname, 'public/uploads');
 const fs = require('fs');
 fs.access(uploadsPath, fs.constants.F_OK, (err) => {
   if (err) logger.error('Uploads directory not found', { path: uploadsPath });
