@@ -20,7 +20,13 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-  origin: 'https://offee-ordering-frontend1-production.up.railway.app', // Explicitly set frontend origin
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.some((allowed) => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
@@ -57,9 +63,9 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      domain: '.up.railway.app', // Share cookie across railway subdomains
+      secure: process.env.NODE_ENV === 'production', // Use secure cookies only in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Adjust sameSite for production
+      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined, // Share across subdomains in production
     },
   })
 );
