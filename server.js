@@ -33,7 +33,7 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'Cookie'],
-  exposedHeaders: ['Set-Cookie'], // Ensure Set-Cookie is exposed
+  exposedHeaders: ['Set-Cookie', 'Authorization'], // Ensure Set-Cookie is exposed
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
@@ -72,7 +72,7 @@ app.use(
     key: 'session_cookie_name',
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     store: sessionStore,
-    resave: false,
+    resave: true, // Force save to ensure session persists
     saveUninitialized: false,
     cookie: {
       maxAge: 86400000,
@@ -92,7 +92,8 @@ app.use((req, res, next) => {
     user: req.session.user ? req.session.user.id : 'anonymous',
     sessionID: req.sessionID,
     origin: req.headers.origin,
-    cookies: req.headers.cookie,
+    cookies: req.headers.cookie || 'No cookie',
+    cookieHeader: req.headers['cookie'],
   });
 
   // Log session ID changes
@@ -102,6 +103,8 @@ app.use((req, res, next) => {
       userId: req.session.user.id,
       role: req.session.user.role,
     });
+  } else if (req.headers.cookie && !req.session.user) {
+    logger.warn('Session exists but user not found', { sessionID: req.sessionID, cookies: req.headers.cookie });
   }
 
   // Ensure session is saved after modification
@@ -111,6 +114,7 @@ app.use((req, res, next) => {
         logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
       } else {
         logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private'); // Prevent caching
       }
     });
   }
