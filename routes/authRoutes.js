@@ -40,8 +40,15 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     req.session.user = { id: user.id, email: user.email, role: user.role };
-    logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role });
-    res.json({ message: 'Logged in', user: req.session.user });
+    req.session.save((err) => {
+      if (err) {
+        logger.error('Error saving session', { error: err.message, email });
+        return res.status(500).json({ error: 'Failed to login' });
+      }
+      logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role, sessionID: req.sessionID });
+      logger.debug('Set-Cookie header for login', { setCookie: res.getHeader('Set-Cookie') || 'No Set-Cookie header' });
+      res.json({ message: 'Logged in', user: req.session.user });
+    });
   } catch (error) {
     logger.error('Error during login', { error: error.message, email });
     res.status(500).json({ error: 'Failed to login' });

@@ -22,8 +22,9 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.some((allowed) => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, true);
+      callback(null, origin); // Return specific origin instead of true
     } else {
+      logger.warn('CORS origin not allowed', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -70,6 +71,14 @@ app.use(
 );
 
 app.use((req, res, next) => {
+  const originalEnd = res.end;
+  res.end = function (...args) {
+    const setCookie = res.getHeader('Set-Cookie');
+    if (setCookie) {
+      logger.debug('Set-Cookie header sent', { setCookie });
+    }
+    return originalEnd.apply(res, args);
+  };
   logger.info('Incoming request', {
     method: req.method,
     url: req.url,
@@ -137,7 +146,7 @@ function logRoutes() {
       });
     } else if (layer.name === 'router' && layer.handle.stack) {
       const prefix = layer.regexp.source
-        .replace(/\\\//g, '/')
+        .replace(/\\\\/g, '/')
         .replace(/^\/\^/, '')
         .replace(/\/\?\(\?=\/\|\$\)/, '');
       layer.handle.stack.forEach((handler) => {
