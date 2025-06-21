@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'https://offee-ordering-frontend1-production.up.railway.app',
+  'https://offee-ordering-frontend1-production.up.railway.app',
   'http://localhost:5173',
   'http://192.168.1.13:5173',
   /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
@@ -24,7 +24,6 @@ const corsOptions = {
     if (!origin || allowedOrigins.some((allowed) => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
-      logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -35,7 +34,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 const io = new Server(server, { cors: corsOptions });
 
@@ -65,8 +63,9 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production', // Use secure cookies only in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Adjust sameSite for production
+      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined, // Share across subdomains in production
     },
   })
 );
@@ -79,33 +78,30 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
-    setCookie: res.get('Set-Cookie') || 'No Set-Cookie',
   });
   next();
 });
 
 // Routes
-const routeFiles = [
-  { path: './routes/authRoutes', name: 'authRoutes' },
-  { path: './routes/menuRoutes', name: 'menuRoutes' },
-  { path: './routes/orderRoutes', name: 'orderRoutes', factory: (io) => require('./routes/orderRoutes')(io) },
-  { path: './routes/reservationRoutes', name: 'reservationRoutes', factory: (io) => require('./routes/reservationRoutes')(io) },
-  { path: './routes/promotionRoutes', name: 'promotionRoutes' },
-  { path: './routes/analyticsRoutes', name: 'analyticsRoutes' },
-  { path: './routes/notificationRoutes', name: 'notificationRoutes' },
-  { path: './routes/bannerRoutes', name: 'bannerRoutes' },
-  { path: './routes/breakfastRoutes', name: 'breakfastRoutes' },
-];
+const authRoutes = require('./routes/authRoutes');
+const menuRoutes = require('./routes/menuRoutes');
+const orderRoutes = require('./routes/orderRoutes')(io);
+const reservationRoutes = require('./routes/reservationRoutes')(io);
+const promotionRoutes = require('./routes/promotionRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const bannerRoutes = require('./routes/bannerRoutes');
+const breakfastRoutes = require('./routes/breakfastRoutes');
 
-routeFiles.forEach(({ path, name, factory }) => {
-  try {
-    const route = factory ? factory(io) : require(path);
-    app.use('/api', route);
-    logger.info(`Loaded route: ${name}`);
-  } catch (error) {
-    logger.error(`Failed to load route: ${name}`, { error: error.message, stack: error.stack });
-  }
-});
+app.use('/api', authRoutes);
+app.use('/api', menuRoutes);
+app.use('/api', orderRoutes);
+app.use('/api', reservationRoutes);
+app.use('/api', promotionRoutes);
+app.use('/api', analyticsRoutes);
+app.use('/api', notificationRoutes);
+app.use('/api', bannerRoutes);
+app.use('/api', breakfastRoutes);
 
 // Validation middleware
 app.use('/api', (req, res, next) => {
@@ -134,31 +130,27 @@ app.use('/api', (req, res, next) => {
 });
 
 function logRoutes() {
-  try {
-    app._router?.stack?.forEach((layer) => {
-      if (layer.route) {
-        logger.info('Registered route', {
-          method: layer.route.stack[0].method.toUpperCase(),
-          path: layer.route.path,
-        });
-      } else if (layer.name === 'router' && layer.handle.stack) {
-        const prefix = layer.regexp.source
-          .replace(/\\\//g, '/')
-          .replace(/^\/\^/, '')
-          .replace(/\/\?\(\?=\/\|\$\)/, '');
-        layer.handle.stack.forEach((handler) => {
-          if (handler.route) {
-            logger.info('Registered route', {
-              method: handler.route.stack[0].method.toUpperCase(),
-              path: prefix + handler.route.path,
-            });
-          }
-        });
-      }
-    });
-  } catch (error) {
-    logger.error('Error in logRoutes', { error: error.message, stack: error.stack });
-  }
+  app._router?.stack?.forEach((layer) => {
+    if (layer.route) {
+      logger.info('Registered route', {
+        method: layer.route.stack[0].method.toUpperCase(),
+        path: layer.route.path,
+      });
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      const prefix = layer.regexp.source
+        .replace(/\\\//g, '/')
+        .replace(/^\/\^/, '')
+        .replace(/\/\?\(\?=\/\|\$\)/, '');
+      layer.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          logger.info('Registered route', {
+            method: handler.route.stack[0].method.toUpperCase(),
+            path: prefix + handler.route.path,
+          });
+        }
+      });
+    }
+  });
 }
 
 logRoutes();
