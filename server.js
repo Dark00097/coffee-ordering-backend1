@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']), 
+  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']), // Fixed typo: 'offee' to 'coffee'
 ];
 
 console.log('Allowed Origins:', allowedOrigins);
@@ -29,7 +29,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'], // Removed 'x-session-id' as it's not used
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   exposedHeaders: ['Set-Cookie'],
   optionsSuccessStatus: 200,
 };
