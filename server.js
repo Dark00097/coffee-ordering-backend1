@@ -24,6 +24,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.some((allowed) => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
+      logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -34,7 +35,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
 
 const io = new Server(server, { cors: corsOptions });
 
@@ -62,11 +63,11 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 86400000, // 1 day
+      maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // true in production
+      secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined,
+      // Removed domain to avoid subdomain issues
     },
   })
 );
@@ -79,6 +80,7 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
+    setCookie: res.get('Set-Cookie') || 'No Set-Cookie',
   });
   next();
 });
@@ -131,27 +133,31 @@ app.use('/api', (req, res, next) => {
 });
 
 function logRoutes() {
-  app._router?.stack?.forEach((layer) => {
-    if (layer.route) {
-      logger.info('Registered route', {
-        method: layer.route.stack[0].method.toUpperCase(),
-        path: layer.route.path,
-      });
-    } else if (layer.name === 'router' && layer.handle.stack) {
-      const prefix = layer.regexp.source
-        .replace(/\\\//g, '/')
-        .replace(/^\/\^/, '')
-        .replace(/\/\?\(\?=\/\|\$\)/, '');
-      layer.handle.stack.forEach((handler) => {
-        if (handler.route) {
-          logger.info('Registered route', {
-            method: handler.route.stack[0].method.toUpperCase(),
-            path: prefix + handler.route.path,
-          });
-        }
-      });
-    }
-  });
+  try {
+    app._router?.stack?.forEach((layer) => {
+      if (layer.route) {
+        logger.info('Registered route', {
+          method: layer.route.stack[0].method.toUpperCase(),
+          path: layer.route.path,
+        });
+      } else if (layer.name === 'router' && layer.handle.stack) {
+        const prefix = layer.regexp.source
+          .replace(/\\\//g, '/')
+          .replace(/^\/\^/, '')
+          .replace(/\/\?\(\?=\/\|\$\)/, '');
+        layer.handle.stack.forEach((handler) => {
+          if (handler.route) {
+            logger.info('Registered route', {
+              method: handler.route.stack[0].method.toUpperCase(),
+              path: prefix + handler.route.path,
+            });
+          }
+        });
+      }
+    });
+  } catch (error) {
+    logger.error('Error in logRoutes', { error: error.message, stack: error.stack });
+  }
 }
 
 logRoutes();
