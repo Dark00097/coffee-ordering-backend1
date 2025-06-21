@@ -14,11 +14,14 @@ const server = http.createServer(app);
 
 const allowedOrigins = [
   'https://offee-ordering-frontend1-production.up.railway.app',
+  'http://localhost:5173',
+  'http://192.168.1.13:5173',
+  /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -39,7 +42,7 @@ const sessionStore = new MySQLStore({
   host: process.env.DB_HOST || 'mysql.railway.internal',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'railway',
   clearExpired: true,
   checkExpirationInterval: 900000,
@@ -48,7 +51,7 @@ const sessionStore = new MySQLStore({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 
 app.use(
   session({
@@ -60,8 +63,8 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     },
   })
 );
@@ -78,7 +81,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes (same as localhost)
+// Routes
 const authRoutes = require('./routes/authRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes')(io);
@@ -99,7 +102,7 @@ app.use('/api', notificationRoutes);
 app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 
-// Validation middleware (same as localhost)
+// Validation middleware
 app.use('/api', (req, res, next) => {
   if (
     req.method === 'POST' ||

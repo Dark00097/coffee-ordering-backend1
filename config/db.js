@@ -12,24 +12,28 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
       type: 'internal',
     },
     {
-      host: process.env.DB_PUBLIC_HOST || 'caboose.proxy.rlwy.net',
-      port: process.env.DB_PUBLIC_PORT || 29085,
-      type: 'public',
+      host: process.env.DB_PUBLIC_HOST || process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PUBLIC_PORT || process.env.DB_PORT || 3306,
+      type: 'public/local',
     },
   ];
 
+  if (!process.env.DB_USER || !process.env.DB_NAME) {
+    throw new Error('DB_USER and DB_NAME must be set in environment variables');
+  }
+
   for (let i = 0; i < hosts.length; i++) {
     const { host, port, type } = hosts[i];
-    logger.info(`Starting connection attempts to ${type} host`, { host, port });
+    logger.info(`Attempting connection to ${type} host`, { host, port });
     let success = false;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         pool = mysql.createPool({
           host,
           port,
-          user: process.env.DB_USER || 'root',
+          user: process.env.DB_USER,
           password: process.env.DB_PASSWORD || '',
-          database: process.env.DB_NAME || 'railway',
+          database: process.env.DB_NAME,
           waitForConnections: true,
           connectionLimit: 10,
           queueLimit: 0,
@@ -49,8 +53,6 @@ async function createPoolWithRetry(retries = 5, delay = 3000) {
           error: err.message,
           host,
           port,
-          user: process.env.DB_USER,
-          database: process.env.DB_NAME,
         });
         if (attempt < retries) {
           logger.info(`Retrying ${type} host in ${delay}ms...`);
