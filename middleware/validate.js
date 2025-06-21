@@ -10,7 +10,6 @@ const validate = (req, res, next) => {
     path: req.path,
     params: req.params,
     body: req.body,
-    sessionId: req.sessionId,
   });
 
   // Menu item validations
@@ -23,14 +22,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('name')
           .isString()
           .notEmpty()
@@ -195,14 +187,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('name')
           .isString()
           .notEmpty()
@@ -232,14 +217,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('name')
           .isString()
           .notEmpty()
@@ -279,14 +257,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('email').isEmail().withMessage('Valid email is required'),
         body('role')
           .isIn(['server', 'admin'])
@@ -319,14 +290,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('table_number')
           .isString()
           .notEmpty()
@@ -387,14 +351,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('name')
           .isString()
           .notEmpty()
@@ -425,14 +382,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('supplement_id')
           .isString()
           .trim()
@@ -477,14 +427,7 @@ const validate = (req, res, next) => {
             .trim()
             .customSanitizer(value => value ? parseInt(value) : undefined)
             .isInt({ min: 1 })
-            .withMessage('Valid user ID is required')
-            .custom(async (value, { req }) => {
-              if (!value) return true;
-              if (!req.user || req.user.id !== value) {
-                throw new Error('User ID does not match authenticated user');
-              }
-              return true;
-            }),
+            .withMessage('Valid user ID is required'),
           body('name')
             .isString()
             .notEmpty()
@@ -522,14 +465,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('title')
           .isString()
           .notEmpty()
@@ -582,14 +518,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('group_id')
           .isString()
           .trim()
@@ -659,14 +588,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('name')
           .isString()
           .notEmpty()
@@ -716,14 +638,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('type')
           .isIn(['order', 'reservation'])
           .withMessage('Type must be order or reservation'),
@@ -744,14 +659,7 @@ const validate = (req, res, next) => {
           .trim()
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
-          .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          }),
+          .withMessage('Valid user ID is required'),
         body('title')
           .isString()
           .notEmpty()
@@ -871,13 +779,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/categories\/\d+$/)) {
       validations.push(
@@ -894,13 +795,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/promotions\/\d+$/)) {
       validations.push(
@@ -917,13 +811,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/staff\/\d+$/) || req.path.match(/^\/users\/\d+$/)) {
       validations.push(
@@ -940,13 +827,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/tables\/\d+$/)) {
       validations.push(
@@ -963,13 +843,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/supplements\/\d+$/)) {
       validations.push(
@@ -986,13 +859,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     } else if (req.path.match(/^\/breakfasts\/\d+$/)) {
       validations.push(
@@ -1009,13 +875,6 @@ const validate = (req, res, next) => {
           .customSanitizer(value => value ? parseInt(value) : undefined)
           .isInt({ min: 1 })
           .withMessage('Valid user ID is required')
-          .custom(async (value, { req }) => {
-            if (!value) return true;
-            if (!req.user || req.user.id !== value) {
-              throw new Error('User ID does not match authenticated user');
-            }
-            return true;
-          })
       );
     }
   }
@@ -1030,7 +889,6 @@ const validate = (req, res, next) => {
         body: req.body,
         params: req.params,
         query: req.query,
-        sessionId: req.sessionId,
       });
       return res.status(400).json({ errors: errors.array() });
     }
