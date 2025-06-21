@@ -32,7 +32,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'Cookie'],
+  exposedHeaders: ['Set-Cookie'], // Ensure Set-Cookie is exposed
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
@@ -82,21 +83,43 @@ app.use(
   })
 );
 
-// Middleware to log and maintain session
+// Middleware to track and enforce session
 app.use((req, res, next) => {
+  const originalSessionId = req.sessionID;
   logger.info('Incoming request', {
     method: req.method,
-    url: req.url,
+    url: req.path,
     user: req.session.user ? req.session.user.id : 'anonymous',
     sessionID: req.sessionID,
     origin: req.headers.origin,
+    cookies: req.headers.cookie,
   });
 
-  // Ensure session is saved and logged
-  if (req.session.user && req.session.isModified) {
+  // Log session ID changes
+  if (req.session && req.session.user) {
+    logger.info('Active session', {
+      sessionID: req.sessionID,
+      userId: req.session.user.id,
+      role: req.session.user.role,
+    });
+  }
+
+  // Ensure session is saved after modification
+  if (req.session && req.session.isModified) {
     req.session.save((err) => {
-      if (err) logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
-      else logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
+      if (err) {
+        logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
+      } else {
+        logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
+      }
+    });
+  }
+
+  // Check if session ID changed unexpectedly
+  if (req.sessionID !== originalSessionId) {
+    logger.warn('Session ID changed during request', {
+      original: originalSessionId,
+      new: req.sessionID,
     });
   }
   next();
