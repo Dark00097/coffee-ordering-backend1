@@ -64,8 +64,9 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: true, // Force secure for HTTPS environments like Railway
-      sameSite: 'none', // Required for cross-origin cookies with credentials
+      secure: true,
+      sameSite: 'none',
+      domain: '.up.railway.app', // Allow cookie to work across subdomains
     },
   })
 );
