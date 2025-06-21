@@ -71,9 +71,8 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: undefined,
+      secure: true, // Always secure on Railway
+      sameSite: 'none', // Always 'none' for cross-origin
     },
   })
 );
@@ -86,6 +85,7 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
+    setCookie: res.get('Set-Cookie') || 'Not set',
   });
   if (req.session && req.session.user) {
     logger.info('Active session', {
@@ -220,7 +220,6 @@ io.on('connection', (socket) => {
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
         } else {
           logger.warn('Session or user data missing or invalid role', { sessionId, session });
-          // Allow socket to join even if no role yet, to avoid disconnect
         }
       } else {
         logger.warn('No session data found', { sessionId });
