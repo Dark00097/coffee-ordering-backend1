@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  'https://offee-ordering-frontend1-production.up.railway.app',
+  process.env.CLIENT_URL || 'https://offee-ordering-frontend1-production.up.railway.app',
   'http://localhost:5173',
   'http://192.168.1.13:5173',
   /^http:\/\/192\.168\.1\.\d{1,3}:5173$/,
@@ -34,6 +34,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight requests explicitly
 
 const io = new Server(server, { cors: corsOptions });
 
@@ -41,7 +42,7 @@ const sessionStore = new MySQLStore({
   host: process.env.DB_HOST || 'mysql.railway.internal',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || '',
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'railway',
   clearExpired: true,
   checkExpirationInterval: 900000,
@@ -56,16 +57,16 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { 
 app.use(
   session({
     key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'your_secret_key',
+    secret: process.env.SESSION_SECRET || 'karim123@',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 86400000,
+      maxAge: 86400000, // 1 day
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure cookies only in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Adjust sameSite for production
-      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined, // Share across subdomains in production
+      secure: process.env.NODE_ENV === 'production', // true in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined,
     },
   })
 );
