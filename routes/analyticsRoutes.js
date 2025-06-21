@@ -3,11 +3,11 @@ const router = express.Router();
 const db = require('../config/db');
 const logger = require('../logger');
 const { query, validationResult } = require('express-validator');
+const { v4: uuidv4 } = require('uuid');
 
-const checkAdmin = async (userId) => {
-  if (!userId) return false;
-  const [rows] = await db.query('SELECT role FROM users WHERE id = ?', [userId]);
-  return rows.length > 0 && rows[0].role === 'admin';
+const checkAdmin = async (user) => {
+  if (!user) return false;
+  return user.role === 'admin';
 };
 
 // Validation middleware for query parameters
@@ -23,16 +23,13 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
   const conditions = [];
   const params = [];
 
-  // Convert inputs to strings and validate
   const startDateStr = startDate ? String(startDate) : null;
   const endDateStr = endDate ? String(endDate) : null;
 
   if (startDateStr && startDateStr !== 'undefined') {
     try {
-      // Parse as Date and normalize to start of day if no time provided
       const start = new Date(startDateStr);
       if (isNaN(start.getTime())) throw new Error('Invalid start date');
-      // If no time component (e.g., YYYY-MM-DD), set to 00:00:00
       const startFormatted = startDateStr.includes('T') || startDateStr.includes(' ')
         ? start.toISOString()
         : `${startDateStr}T00:00:00.000Z`;
@@ -46,10 +43,8 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
 
   if (endDateStr && endDateStr !== 'undefined') {
     try {
-      // Parse as Date and normalize to end of day if no time provided
       const end = new Date(endDateStr);
       if (isNaN(end.getTime())) throw new Error('Invalid end date');
-      // If no time component, set to 23:59:59
       const endFormatted = endDateStr.includes('T') || endDateStr.includes(' ')
         ? end.toISOString()
         : `${endDateStr}T23:59:59.999Z`;
@@ -67,27 +62,28 @@ const buildTimeFilter = (startDate, endDate, tableAlias) => {
 // Fetch enhanced analytics overview
 router.get('/analytics-overview', validateQueryParams, async (req, res) => {
   const errors = validationResult(req);
+  const sessionId = req.headers['x-session-id'] || uuidv4();
+  const timestamp = new Date().toISOString();
   if (!errors.isEmpty()) {
-    logger.warn('Validation errors for analytics overview', { errors: errors.array() });
+    logger.warn('Validation errors for analytics overview', { errors: errors.array(), sessionId, timestamp });
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { start_date, end_date, category_id, order_type } = req.query;
+  const user = req.user;
 
   try {
-    if (!req.session.user || !await checkAdmin(req.session.user.id)) {
-      logger.warn('Unauthorized attempt to fetch analytics', { sessionUser: req.session.user });
+    if (!user || !await checkAdmin(user)) {
+      logger.warn('Unauthorized attempt to fetch analytics', { userId: user?.id, sessionId, timestamp });
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    logger.debug('Fetching analytics with query:', { query: req.query });
+    logger.debug('Fetching analytics with query:', { query: req.query, userId: user.id, sessionId, timestamp });
 
-    // Build time filter for orders
     const orderTimeFilter = buildTimeFilter(start_date, end_date, 'o');
     let orderWhereClause = orderTimeFilter.conditions.length > 0 ? `WHERE ${orderTimeFilter.conditions.join(' AND ')}` : '';
     let orderParams = [...orderTimeFilter.params];
 
-    // Additional filters for orders
     const orderConditions = [];
     if (order_type) {
       orderConditions.push('o.order_type = ?');
@@ -97,7 +93,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       orderWhereClause = orderWhereClause ? `${orderWhereClause} AND ${orderConditions.join(' AND ')}` : `WHERE ${orderConditions.join(' AND ')}`;
     }
 
-    // Build time filter for previous period (for percentage change)
     let previousStartDate, previousEndDate;
     if (start_date && end_date) {
       const start = new Date(start_date);
@@ -106,7 +101,7 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
         throw new Error('Invalid date range for previous period calculation');
       }
       const diff = end.getTime() - start.getTime();
-      previousEndDate = new Date(start.getTime() - 1000); // 1 second before start
+      previousEndDate = new Date(start.getTime() - 1000);
       previousStartDate = new Date(previousEndDate.getTime() - diff);
     }
     const prevOrderTimeFilter = buildTimeFilter(previousStartDate, previousEndDate, 'o');
@@ -117,7 +112,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       prevOrderParams.push(order_type);
     }
 
-    // Total Orders
     logger.debug('Querying total orders:', { query: `SELECT COUNT(*) as count FROM orders o ${orderWhereClause}`, params: orderParams });
     const [totalOrders] = await db.query(`SELECT COUNT(*) as count FROM orders o ${orderWhereClause}`, orderParams);
     logger.debug('Querying previous total orders:', { query: `SELECT COUNT(*) as count FROM orders o ${prevOrderWhereClause}`, params: prevOrderParams });
@@ -128,7 +122,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       ? ((totalOrdersCount - prevTotalOrdersCount) / prevTotalOrdersCount * 100).toFixed(2)
       : null;
 
-    // Total Revenue (only for approved orders)
     let revenueWhereClause = orderWhereClause ? `${orderWhereClause} AND o.approved = 1` : `WHERE o.approved = 1`;
     let revenueParams = [...orderParams];
     let prevRevenueWhereClause = prevOrderWhereClause ? `${prevOrderWhereClause} AND o.approved = 1` : `WHERE o.approved = 1`;
@@ -143,14 +136,12 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       ? ((revenue - prevRevenue) / prevRevenue * 100).toFixed(2)
       : null;
 
-    // Order Type Breakdown
     logger.debug('Querying order type breakdown:', { query: `SELECT o.order_type, COUNT(*) as count FROM orders o ${orderWhereClause} GROUP BY o.order_type`, params: orderParams });
     const [orderTypeBreakdown] = await db.query(
       `SELECT o.order_type, COUNT(*) as count FROM orders o ${orderWhereClause} GROUP BY o.order_type`,
       orderParams
     );
 
-    // Top Selling Items (include revenue)
     let topItemsWhereClause = orderTimeFilter.conditions.length > 0 ? `WHERE ${orderTimeFilter.conditions.join(' AND ')}` : '';
     let topItemsParams = [...orderTimeFilter.params];
     if (category_id) {
@@ -174,7 +165,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       total_revenue: parseFloat(item.total_revenue || 0).toFixed(2),
     }));
 
-    // Sales Trend Over Time (daily if < 1 month, monthly otherwise)
     let groupByClause = 'DATE(o.created_at)';
     if (start_date && end_date) {
       const start = new Date(start_date);
@@ -198,7 +188,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       total_revenue: parseFloat(item.total_revenue || 0).toFixed(2),
     }));
 
-    // Table Reservation Status
     const reservationTimeFilter = buildTimeFilter(start_date, end_date, 'r');
     let reservationWhereClause = reservationTimeFilter.conditions.length > 0 ? `WHERE ${reservationTimeFilter.conditions.join(' AND ')}` : '';
     let reservationParams = [...reservationTimeFilter.params];
@@ -221,7 +210,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       reservationParams
     );
 
-    // Average Rating per Item
     let ratingsWhereClause = '';
     let ratingsParams = [];
     if (category_id) {
@@ -246,7 +234,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       review_count: parseInt(item.review_count || 0),
     }));
 
-    // Category Sales Distribution
     let categorySalesWhereClause = orderTimeFilter.conditions.length > 0 ? `WHERE ${orderTimeFilter.conditions.join(' AND ')}` : '';
     let categorySalesParams = [...orderTimeFilter.params];
     if (category_id) {
@@ -270,7 +257,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       total_revenue: parseFloat(item.total_revenue || 0).toFixed(2),
     }));
 
-    // Recent Orders
     logger.debug('Querying recent orders:', { query: `SELECT o.id, o.total_price, o.order_type, o.approved, o.created_at, t.table_number FROM orders o LEFT JOIN tables t ON o.table_id = t.id ${orderWhereClause} ORDER BY o.created_at DESC LIMIT 5`, params: orderParams });
     const [recentOrders] = await db.query(
       `SELECT o.id, o.total_price, o.order_type, o.approved, o.created_at, t.table_number
@@ -286,7 +272,6 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       total_price: parseFloat(order.total_price || 0).toFixed(2),
     }));
 
-    // Promotion Impact
     let promotionWhereClause = orderWhereClause ? `${orderWhereClause} AND o.promotion_id IS NOT NULL` : `WHERE o.promotion_id IS NOT NULL`;
     let promotionParams = [...orderParams];
     logger.debug('Querying promotion impact:', { query: `SELECT p.id, p.name, COUNT(o.id) as order_count, SUM(p.discount_percentage * o.total_price / 100) as total_discount FROM orders o JOIN promotions p ON o.promotion_id = p.id ${promotionWhereClause} GROUP BY p.id ORDER BY order_count DESC`, params: promotionParams });
@@ -326,12 +311,13 @@ router.get('/analytics-overview', validateQueryParams, async (req, res) => {
       promotionImpact: sanitizedPromotionImpact,
     };
 
-    logger.info('Analytics fetched successfully', { filters: req.query });
+    io.to(`user-${user.id}`).emit('analytics-updated', analytics);
+    logger.info('Analytics fetched successfully', { filters: req.query, userId: user.id, sessionId, timestamp });
     res.json(analytics);
   } catch (error) {
-    logger.error('Error fetching analytics', { error: error.stack, filters: req.query });
+    logger.error('Error fetching analytics', { error: error.stack, filters: req.query, userId: user?.id, sessionId, timestamp });
     res.status(500).json({ error: 'Failed to fetch analytics', details: error.message });
   }
 });
 
-module.exports = router;
+module.exports = (io) => router;

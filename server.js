@@ -1,6 +1,4 @@
 const express = require('express');
-const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -8,6 +6,7 @@ const path = require('path');
 const logger = require('./logger');
 const db = require('./config/db');
 const validate = require('./middleware/validate');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,58 +19,46 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-  origin: 'https://offee-ordering-frontend1-production.up.railway.app', // Explicitly set frontend origin
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(allowed => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
-  exposedHeaders: ['Set-Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
 };
 
 app.use(cors(corsOptions));
-
-const io = new Server(server, { cors: corsOptions });
-
-const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'mysql.railway.internal',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'railway',
-  clearExpired: true,
-  checkExpirationInterval: 900000,
-  expiration: 86400000,
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { maxAge: '1d' }));
 
-app.use(
-  session({
-    key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'your_secret_key',
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 86400000,
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      domain: '.up.railway.app', // Share cookie across railway subdomains
-    },
-  })
-);
+const io = new Server(server, { cors: corsOptions });
 
+// Middleware to verify JWT for staff/admin
 app.use((req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const sessionId = req.headers['x-session-id'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
+      req.user = decoded;
+    } catch (err) {
+      logger.warn('Invalid token', { error: err.message });
+    }
+  }
+  req.sessionId = sessionId; // Store session ID for guests
   logger.info('Incoming request', {
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
-    sessionID: req.sessionID,
+    user: req.user ? req.user.id : 'guest',
+    sessionId: sessionId || 'none',
     origin: req.headers.origin,
-    cookies: req.headers.cookie || 'No cookie',
   });
   next();
 });
@@ -98,29 +85,12 @@ app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 
 // Validation middleware
-app.use('/api', (req, res, next) => {
-  if (
-    req.method === 'POST' ||
-    req.method === 'PUT' ||
-    req.method === 'DELETE' ||
-    (req.method === 'GET' && (
-      req.path.includes('/menu-items') ||
-      req.path.includes('/categories') ||
-      req.path.includes('/ratings') ||
-      req.path.includes('/tables') ||
-      req.path.includes('/notifications') ||
-      req.path.includes('/banners') ||
-      req.path.includes('/breakfasts')
-    ))
-  ) {
-    if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
-      if (req.headers['content-type']?.includes('multipart/form-data')) {
-        return next();
-      }
-    }
-    return validate(req, res, next);
-  }
-  next();
+app.use('/api', validate);
+
+// Route to generate session ID for guests
+app.get('/api/session', (req, res) => {
+  const sessionId = req.sessionId || require('uuid').v4();
+  res.json({ sessionId });
 });
 
 function logRoutes() {
@@ -155,7 +125,8 @@ app.use((err, req, res, next) => {
     stack: err.stack,
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
+    user: req.user ? req.user.id : 'guest',
+    sessionId: req.sessionId || 'none',
     origin: req.headers.origin,
   });
   res.status(500).json({ error: 'Internal server error' });
@@ -165,7 +136,8 @@ app.use((req, res) => {
   logger.warn('Route not found', {
     method: req.method,
     url: req.url,
-    user: req.session.user ? req.session.user.id : 'anonymous',
+    user: req.user ? req.user.id : 'guest',
+    sessionId: req.sessionId || 'none',
     origin: req.headers.origin,
   });
   res.status(404).json({ error: 'Not found' });
@@ -174,21 +146,29 @@ app.use((req, res) => {
 io.on('connection', (socket) => {
   logger.info('New socket connection', { id: socket.id });
 
-  socket.on('join-session', async (sessionId) => {
-    socket.join(sessionId);
-    logger.info('Socket joined session room', { socketId: socket.id, sessionId });
+  socket.on('join-session', (data) => {
+    let sessionId, token;
+    if (typeof data === 'string') {
+      sessionId = data; // Guest session ID
+    } else if (typeof data === 'object' && data.token) {
+      token = data.token; // Staff/admin JWT
+    }
 
-    try {
-      const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
-      if (sessionData.length > 0) {
-        const session = JSON.parse(sessionData[0].data);
-        if (session.user && ['admin', 'server'].includes(session.user.role)) {
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
+        socket.join(decoded.id.toString());
+        logger.info('Socket joined user room', { socketId: socket.id, userId: decoded.id });
+        if (['admin', 'server'].includes(decoded.role)) {
           socket.join('staff-notifications');
-          logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
+          logger.info('Socket joined staff-notifications room', { socketId: socket.id, userId: decoded.id, role: decoded.role });
         }
+      } catch (error) {
+        logger.error('Error verifying token for socket', { error: error.message });
       }
-    } catch (error) {
-      logger.error('Error checking session for staff role', { error: error.message, sessionId });
+    } else if (sessionId) {
+      socket.join(`guest-${sessionId}`);
+      logger.info('Socket joined guest room', { socketId: socket.id, sessionId });
     }
   });
 
