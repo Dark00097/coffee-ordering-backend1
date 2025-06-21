@@ -22,7 +22,7 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.some((allowed) => typeof allowed === 'string' ? allowed === origin : allowed.test(origin))) {
-      callback(null, origin); // Return specific origin instead of true
+      callback(null, origin);
     } else {
       logger.warn('CORS origin not allowed', { origin });
       callback(new Error('Not allowed by CORS'));
@@ -49,28 +49,29 @@ const sessionStore = new MySQLStore({
   expiration: 86400000,
 });
 
+const sessionMiddleware = session({
+  key: 'session_cookie_name',
+  secret: process.env.SESSION_SECRET || 'your_secret_key',
+  store: sessionStore,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 86400000,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Temporarily use 'lax' to test
+  },
+});
+
+app.use(sessionMiddleware);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { maxAge: '1d' }));
 
-app.use(
-  session({
-    key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'your_secret_key',
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 86400000,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    },
-  })
-);
-
 app.use((req, res, next) => {
+  logger.debug('Session middleware applied', { sessionID: req.sessionID, sessionData: req.session });
   const originalEnd = res.end;
   res.end = function (...args) {
     const setCookie = res.getHeader('Set-Cookie');

@@ -13,10 +13,10 @@ const checkAdmin = async (userId) => {
 router.get('/check-auth', async (req, res) => {
   try {
     if (!req.session.user) {
-      logger.info('No session user found', { path: req.path });
+      logger.info('No session user found', { path: req.path, sessionID: req.sessionID });
       return res.status(401).json({ error: 'Not authenticated' });
     }
-    logger.info('Session user found', { user: req.session.user });
+    logger.info('Session user found', { user: req.session.user, sessionID: req.sessionID });
     res.json(req.session.user);
   } catch (error) {
     logger.error('Error checking auth', { error: error.message });
@@ -40,6 +40,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     req.session.user = { id: user.id, email: user.email, role: user.role };
+    // Force session to be considered "modified"
+    req.session.touch();
     req.session.save((err) => {
       if (err) {
         logger.error('Error saving session', { error: err.message, email });
