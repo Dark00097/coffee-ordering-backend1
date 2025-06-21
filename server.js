@@ -73,7 +73,7 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: process.env.NODE_ENV === 'production' ? undefined : undefined,
+      domain: undefined,
     },
   })
 );
@@ -87,7 +87,6 @@ app.use((req, res, next) => {
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
   });
-
   if (req.session && req.session.user) {
     logger.info('Active session', {
       sessionID: req.sessionID,
@@ -95,7 +94,6 @@ app.use((req, res, next) => {
       role: req.session.user.role,
     });
   }
-
   req.session.save((err) => {
     if (err) {
       logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
@@ -103,7 +101,6 @@ app.use((req, res, next) => {
       logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
     }
   });
-
   next();
 });
 
@@ -193,7 +190,7 @@ app.use((err, req, res, next) => {
     user: req.session.user ? req.session.user.id : 'anonymous',
     origin: req.headers.origin,
   });
-  resstru: res.status(500).json({ error: 'Internal server error', details: err.message });
+  res.status(500).json({ error: 'Internal server error', details: err.message });
 });
 
 app.use((req, res) => {
@@ -223,15 +220,13 @@ io.on('connection', (socket) => {
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
         } else {
           logger.warn('Session or user data missing or invalid role', { sessionId, session });
-          socket.emit('session-error', { message: 'No session data available' });
+          // Allow socket to join even if no role yet, to avoid disconnect
         }
       } else {
         logger.warn('No session data found', { sessionId });
-        socket.emit('session-error', { message: 'No session data available' });
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
-      socket.emit('session-error', { message: 'Session validation failed' });
     }
   });
 

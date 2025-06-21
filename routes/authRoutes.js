@@ -42,14 +42,20 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     if (['admin', 'server'].includes(user.role)) {
-      req.session.user = { id: user.id, email: user.email, role: user.role };
-      req.session.save((err) => {
+      req.session.regenerate((err) => {
         if (err) {
-          logger.error('Session save error during login', { error: err.message, email });
+          logger.error('Session regeneration error', { error: err.message, email });
           return res.status(500).json({ error: 'Failed to login' });
         }
-        logger.info('Session saved for login', { sessionID: req.sessionID, userId: user.id });
-        res.json({ message: 'Logged in', user: req.session.user });
+        req.session.user = { id: user.id, email: user.email, role: user.role };
+        req.session.save((err) => {
+          if (err) {
+            logger.error('Session save error during login', { error: err.message, email });
+            return res.status(500).json({ error: 'Failed to login' });
+          }
+          logger.info('Session saved for login', { sessionID: req.sessionID, userId: user.id });
+          res.json({ message: 'Logged in', user: req.session.user });
+        });
       });
     } else {
       logger.warn('Login denied: Non-admin/staff role', { email, role: user.role });
