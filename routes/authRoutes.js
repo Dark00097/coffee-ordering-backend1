@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   logger.debug('Login attempt', { email });
   try {
-    const [rows] = await db.queryvega('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (rows.length === 0) {
       logger.warn('Invalid credentials: User not found', { email });
       return res.status(401).json({ error: 'Invalid credentials' });
