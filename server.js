@@ -43,7 +43,7 @@ const sessionStore = new MySQLStore({
   host: process.env.DB_HOST || 'mysql.railway.internal',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'railway',
   clearExpired: true,
   checkExpirationInterval: 900000,
@@ -58,7 +58,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { 
 app.use(
   session({
     key: 'session_cookie_name',
-    secret: process.env.SESSION_SECRET || 'karim123@',
+    secret: process.env.SESSION_SECRET || 'your_secret_key',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -67,7 +67,6 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      // Removed domain to avoid subdomain issues
     },
   })
 );
@@ -86,25 +85,27 @@ app.use((req, res, next) => {
 });
 
 // Routes
-const authRoutes = require('./routes/authRoutes');
-const menuRoutes = require('./routes/menuRoutes');
-const orderRoutes = require('./routes/orderRoutes')(io);
-const reservationRoutes = require('./routes/reservationRoutes')(io);
-const promotionRoutes = require('./routes/promotionRoutes');
-const analyticsRoutes = require('./routes/analyticsRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
-const bannerRoutes = require('./routes/bannerRoutes');
-const breakfastRoutes = require('./routes/breakfastRoutes');
+const routeFiles = [
+  { path: './routes/authRoutes', name: 'authRoutes' },
+  { path: './routes/menuRoutes', name: 'menuRoutes' },
+  { path: './routes/orderRoutes', name: 'orderRoutes', factory: (io) => require('./routes/orderRoutes')(io) },
+  { path: './routes/reservationRoutes', name: 'reservationRoutes', factory: (io) => require('./routes/reservationRoutes')(io) },
+  { path: './routes/promotionRoutes', name: 'promotionRoutes' },
+  { path: './routes/analyticsRoutes', name: 'analyticsRoutes' },
+  { path: './routes/notificationRoutes', name: 'notificationRoutes' },
+  { path: './routes/bannerRoutes', name: 'bannerRoutes' },
+  { path: './routes/breakfastRoutes', name: 'breakfastRoutes' },
+];
 
-app.use('/api', authRoutes);
-app.use('/api', menuRoutes);
-app.use('/api', orderRoutes);
-app.use('/api', reservationRoutes);
-app.use('/api', promotionRoutes);
-app.use('/api', analyticsRoutes);
-app.use('/api', notificationRoutes);
-app.use('/api', bannerRoutes);
-app.use('/api', breakfastRoutes);
+routeFiles.forEach(({ path, name, factory }) => {
+  try {
+    const route = factory ? factory(io) : require(path);
+    app.use('/api', route);
+    logger.info(`Loaded route: ${name}`);
+  } catch (error) {
+    logger.error(`Failed to load route: ${name}`, { error: error.message, stack: error.stack });
+  }
+});
 
 // Validation middleware
 app.use('/api', (req, res, next) => {
