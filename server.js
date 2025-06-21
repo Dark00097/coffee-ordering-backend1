@@ -14,7 +14,7 @@ const server = http.createServer(app);
 
 // Ensure CLIENT_URL is split into an array
 const allowedOrigins = [
-  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173']),
+  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']),
 ];
 
 // Debug CORS origins
@@ -82,6 +82,7 @@ app.use(
   })
 );
 
+// Middleware to log and maintain session
 app.use((req, res, next) => {
   logger.info('Incoming request', {
     method: req.method,
@@ -90,11 +91,12 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
   });
-  // Ensure session is saved after modification
+
+  // Ensure session is saved and logged
   if (req.session.user && req.session.isModified) {
     req.session.save((err) => {
-      if (err) logger.error('Session save error', { error: err.message });
-      else logger.info('Session saved after request', { sessionID: req.sessionID });
+      if (err) logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
+      else logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
     });
   }
   next();
