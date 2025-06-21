@@ -64,8 +64,8 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'production', // Ensure secure is true on Railway
+      sameSite: process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'production' ? 'none' : 'lax',
     },
   })
 );
