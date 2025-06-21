@@ -10,7 +10,6 @@ const checkAdmin = async (userId) => {
   return rows.length > 0 && rows[0].role === 'admin';
 };
 
-// Check authentication
 router.get('/check-auth', async (req, res) => {
   try {
     if (!req.session.user) {
@@ -25,7 +24,6 @@ router.get('/check-auth', async (req, res) => {
   }
 });
 
-// User login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   logger.debug('Login attempt', { email });
@@ -41,33 +39,15 @@ router.post('/login', async (req, res) => {
       logger.warn('Invalid credentials: Password mismatch', { email });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    if (['admin', 'server'].includes(user.role)) {
-      req.session.regenerate((err) => {
-        if (err) {
-          logger.error('Session regeneration error', { error: err.message, email });
-          return res.status(500).json({ error: 'Failed to login' });
-        }
-        req.session.user = { id: user.id, email: user.email, role: user.role };
-        req.session.save((err) => {
-          if (err) {
-            logger.error('Session save error during login', { error: err.message, email });
-            return res.status(500).json({ error: 'Failed to login' });
-          }
-          logger.info('Session saved for login', { sessionID: req.sessionID, userId: user.id });
-          res.json({ message: 'Logged in', user: req.session.user });
-        });
-      });
-    } else {
-      logger.warn('Login denied: Non-admin/staff role', { email, role: user.role });
-      res.status(403).json({ error: 'Only admin or staff can log in' });
-    }
+    req.session.user = { id: user.id, email: user.email, role: user.role };
+    logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role });
+    res.json({ message: 'Logged in', user: req.session.user });
   } catch (error) {
     logger.error('Error during login', { error: error.message, email });
     res.status(500).json({ error: 'Failed to login' });
   }
 });
 
-// User logout
 router.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -79,7 +59,6 @@ router.post('/logout', (req, res) => {
   });
 });
 
-// Create staff
 router.post('/staff', async (req, res) => {
   const { user_id, email, password, role } = req.body;
   try {
@@ -101,7 +80,6 @@ router.post('/staff', async (req, res) => {
   }
 });
 
-// Update staff
 router.put('/users/:id', async (req, res) => {
   const { user_id, email, password, role } = req.body;
   const { id } = req.params;
@@ -118,6 +96,11 @@ router.put('/users/:id', async (req, res) => {
     if (role !== 'server' && role !== 'admin') {
       logger.warn('Invalid role', { role });
       return res.status(400).json({ error: 'Invalid role' });
+    }
+    const [existing] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
+    if (existing.length === 0) {
+      logger.warn('User not found', { id: userId });
+      return res.status(404).json({ error: 'User not found' });
     }
     const updates = [];
     const values = [];
@@ -152,7 +135,6 @@ router.put('/users/:id', async (req, res) => {
   }
 });
 
-// Delete staff
 router.delete('/users/:id', async (req, res) => {
   const { user_id } = req.body;
   const { id } = req.params;
@@ -184,7 +166,6 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// Fetch all users
 router.get('/users', async (req, res) => {
   try {
     if (!req.session.user || !await checkAdmin(req.session.user.id)) {
@@ -200,7 +181,6 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// Fetch single user
 router.get('/users/:id', async (req, res) => {
   const { id } = req.params;
   try {

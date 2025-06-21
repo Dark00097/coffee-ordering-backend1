@@ -13,14 +13,12 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']), // Fixed typo: 'offee' to 'coffee'
+  'https://offee-ordering-frontend1-production.up.railway.app',
 ];
-
-console.log('Allowed Origins:', allowedOrigins);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(allowed => allowed === origin.trim())) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
@@ -29,36 +27,27 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
   exposedHeaders: ['Set-Cookie'],
-  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 
-const io = new Server(server, {
-  cors: corsOptions,
-  path: '/socket.io/',
-  serveClient: false,
-});
+const io = new Server(server, { cors: corsOptions });
 
 const sessionStore = new MySQLStore({
   host: process.env.DB_HOST || 'mysql.railway.internal',
   port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'railway',
   clearExpired: true,
   checkExpirationInterval: 900000,
   expiration: 86400000,
 });
 
-sessionStore.on('ready', () => logger.info('Session store ready'));
-sessionStore.on('error', (error) => logger.error('Session store error', { error: error.message }));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(
@@ -77,59 +66,19 @@ app.use(
   })
 );
 
-// Debug middleware to log session and cookie details
-app.use((req, res, next) => {
-  logger.info('Session debug', {
-    sessionID: req.sessionID,
-    sessionUser: req.session.user || 'none',
-    cookies: req.headers.cookie || 'none',
-  });
-  next();
-});
-
 app.use((req, res, next) => {
   logger.info('Incoming request', {
     method: req.method,
-    url: req.path,
+    url: req.url,
     user: req.session.user ? req.session.user.id : 'anonymous',
     sessionID: req.sessionID,
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
-    setCookie: res.get('Set-Cookie') || 'Not set',
-  });
-  if (req.session && req.session.user) {
-    logger.info('Active session', {
-      sessionID: req.sessionID,
-      userId: req.session.user.id,
-      role: req.session.user.role,
-    });
-  }
-  req.session.save((err) => {
-    if (err) {
-      logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
-    } else {
-      logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
-    }
   });
   next();
 });
 
-const uploadsPath = path.join(__dirname, 'public/uploads');
-const fs = require('fs');
-fs.access(uploadsPath, fs.constants.F_OK, (err) => {
-  if (err) logger.error('Uploads directory not found', { path: uploadsPath });
-  else logger.info('Uploads directory found', { path: uploadsPath });
-});
-
-app.get('/api/session', (req, res) => {
-  if (!req.sessionID) {
-    logger.warn('No session ID available');
-    return res.status(401).json({ error: 'No active session' });
-  }
-  logger.info('Session ID returned', { sessionId: req.sessionID });
-  res.json({ sessionId: req.sessionID });
-});
-
+// Routes (same as localhost)
 const authRoutes = require('./routes/authRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes')(io);
@@ -150,16 +99,27 @@ app.use('/api', notificationRoutes);
 app.use('/api', bannerRoutes);
 app.use('/api', breakfastRoutes);
 
+// Validation middleware (same as localhost)
 app.use('/api', (req, res, next) => {
   if (
     req.method === 'POST' ||
     req.method === 'PUT' ||
     req.method === 'DELETE' ||
     (req.method === 'GET' && (
+      req.path.includes('/menu-items') ||
+      req.path.includes('/categories') ||
+      req.path.includes('/ratings') ||
+      req.path.includes('/tables') ||
       req.path.includes('/notifications') ||
-      req.path.includes('/analytics')
+      req.path.includes('/banners') ||
+      req.path.includes('/breakfasts')
     ))
   ) {
+    if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
+      if (req.headers['content-type']?.includes('multipart/form-data')) {
+        return next();
+      }
+    }
     return validate(req, res, next);
   }
   next();
@@ -200,7 +160,7 @@ app.use((err, req, res, next) => {
     user: req.session.user ? req.session.user.id : 'anonymous',
     origin: req.headers.origin,
   });
-  res.status(500).json({ error: 'Internal server error', details: err.message });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.use((req, res) => {
@@ -222,17 +182,12 @@ io.on('connection', (socket) => {
 
     try {
       const [sessionData] = await db.query('SELECT data FROM sessions WHERE session_id = ?', [sessionId]);
-      if (sessionData.length > 0 && sessionData[0].data) {
+      if (sessionData.length > 0) {
         const session = JSON.parse(sessionData[0].data);
-        logger.info('Parsed session data', { sessionId, session });
-        if (session && session.user && ['admin', 'server'].includes(session.user.role)) {
+        if (session.user && ['admin', 'server'].includes(session.user.role)) {
           socket.join('staff-notifications');
           logger.info('Socket joined staff-notifications room', { socketId: socket.id, sessionId, role: session.user.role });
-        } else {
-          logger.warn('Session or user data missing or invalid role', { sessionId, session });
         }
-      } else {
-        logger.warn('No session data found', { sessionId });
       }
     } catch (error) {
       logger.error('Error checking session for staff role', { error: error.message, sessionId });
@@ -250,11 +205,7 @@ server.listen(PORT, '0.0.0.0', async () => {
     await db.getConnection();
     logger.info(`Server running on port ${PORT}`);
   } catch (error) {
-    logger.error('Failed to start server due to database connection error', {
-      error: error.message,
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-    });
+    logger.error('Failed to connect to database', { error: error.message });
     process.exit(1);
   }
 });
