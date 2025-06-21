@@ -47,7 +47,7 @@ router.post('/login', async (req, res) => {
       }
       logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role, sessionID: req.sessionID });
       logger.debug('Set-Cookie header for login', { setCookie: res.getHeader('Set-Cookie') || 'No Set-Cookie header' });
-      res.json({ message: 'Logged in', user: req.session.user });
+      res.json({ message: 'Logged in', user: { id: user.id, email: user.email, role: user.role }, token: req.sessionID });
     });
   } catch (error) {
     logger.error('Error during login', { error: error.message, email });
