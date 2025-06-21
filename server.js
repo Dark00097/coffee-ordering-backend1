@@ -47,6 +47,10 @@ const sessionStore = new MySQLStore({
   clearExpired: true,
   checkExpirationInterval: 900000,
   expiration: 86400000,
+}, db);
+
+sessionStore.on('error', (error) => {
+  logger.error('Session store error', { error: error.message });
 });
 
 const sessionMiddleware = session({
@@ -54,12 +58,12 @@ const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   store: sessionStore,
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true, // Force cookie for all sessions
   cookie: {
     maxAge: 86400000,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Temporarily use 'lax' to test
+    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
   },
 });
 
@@ -71,7 +75,7 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { maxAge: '1d' }));
 
 app.use((req, res, next) => {
-  logger.debug('Session middleware applied', { sessionID: req.sessionID, sessionData: req.session });
+  logger.debug('Session middleware applied', { sessionID: req.sessionID, sessionData: JSON.stringify(req.session) });
   const originalEnd = res.end;
   res.end = function (...args) {
     const setCookie = res.getHeader('Set-Cookie');
