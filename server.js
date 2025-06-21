@@ -63,9 +63,8 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure cookies only in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Adjust sameSite for production
-      domain: process.env.NODE_ENV === 'production' ? '.up.railway.app' : undefined, // Share across subdomains in production
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     },
   })
 );
