@@ -12,7 +12,6 @@ const validate = require('./middleware/validate');
 const app = express();
 const server = http.createServer(app);
 
-// Ensure CLIENT_URL is split into an array
 const allowedOrigins = [
   ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']),
 ];
@@ -21,18 +20,17 @@ console.log('Allowed Origins:', allowedOrigins);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow requests with no origin (e.g., mobile apps)
-    if (allowedOrigins.some(allowed => allowed === origin.trim())) {
+    if (!origin || allowedOrigins.some(allowed => allowed === origin.trim())) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // Ensure credentials are included
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'Cookie'],
-  exposedHeaders: ['Set-Cookie', 'Authorization'],
+  exposedHeaders: ['Set-Cookie'],
   optionsSuccessStatus: 200,
 };
 
@@ -60,7 +58,6 @@ sessionStore.on('error', (error) => logger.error('Session store error', { error:
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/Uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -69,13 +66,14 @@ app.use(
     key: 'session_cookie_name',
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     store: sessionStore,
-    resave: true,
+    resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Enforce secure cookies in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Must match secure setting
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      domain: process.env.NODE_ENV === 'production' ? undefined : undefined,
     },
   })
 );
@@ -88,7 +86,6 @@ app.use((req, res, next) => {
     sessionID: req.sessionID,
     origin: req.headers.origin,
     cookies: req.headers.cookie || 'No cookie',
-    cookieHeader: req.headers['cookie'],
   });
 
   if (req.session && req.session.user) {
@@ -97,19 +94,16 @@ app.use((req, res, next) => {
       userId: req.session.user.id,
       role: req.session.user.role,
     });
-  } else if (req.headers.cookie && !req.session.user) {
-    logger.warn('Session exists but user not found', { sessionID: req.sessionID, cookies: req.headers.cookie });
   }
 
-  if (req.session && req.session.isModified) {
-    req.session.save((err) => {
-      if (err) logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
-      else {
-        logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      }
-    });
-  }
+  req.session.save((err) => {
+    if (err) {
+      logger.error('Session save error', { error: err.message, sessionID: req.sessionID });
+    } else {
+      logger.info('Session saved', { sessionID: req.sessionID, user: req.session.user });
+    }
+  });
+
   next();
 });
 
@@ -127,13 +121,6 @@ app.get('/api/session', (req, res) => {
   }
   logger.info('Session ID returned', { sessionId: req.sessionID });
   res.json({ sessionId: req.sessionID });
-});
-
-app.use((req, res, next) => {
-  if (req.session && req.session.user) {
-    logger.info('Session updated', { sessionID: req.sessionID, user: req.session.user });
-  }
-  next();
 });
 
 const authRoutes = require('./routes/authRoutes');
@@ -162,20 +149,10 @@ app.use('/api', (req, res, next) => {
     req.method === 'PUT' ||
     req.method === 'DELETE' ||
     (req.method === 'GET' && (
-      req.path.includes('/menu-items') ||
-      req.path.includes('/categories') ||
-      req.path.includes('/ratings') ||
-      req.path.includes('/tables') ||
       req.path.includes('/notifications') ||
-      req.path.includes('/banners') ||
-      req.path.includes('/breakfasts')
+      req.path.includes('/analytics')
     ))
   ) {
-    if (req.path.includes('/menu-items') || req.path.includes('/categories') || req.path.includes('/banners') || req.path.includes('/breakfasts')) {
-      if (req.headers['content-type']?.includes('multipart/form-data')) {
-        return next();
-      }
-    }
     return validate(req, res, next);
   }
   next();
@@ -216,7 +193,7 @@ app.use((err, req, res, next) => {
     user: req.session.user ? req.session.user.id : 'anonymous',
     origin: req.headers.origin,
   });
-  res.status(500).json({ error: 'Internal server error', details: err.message });
+  resstru: res.status(500).json({ error: 'Internal server error', details: err.message });
 });
 
 app.use((req, res) => {

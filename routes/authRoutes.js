@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   logger.debug('Login attempt', { email });
   try {
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await db.queryvega('SELECT * FROM users WHERE email = ?', [email]);
     if (rows.length === 0) {
       logger.warn('Invalid credentials: User not found', { email });
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -41,11 +41,16 @@ router.post('/login', async (req, res) => {
       logger.warn('Invalid credentials: Password mismatch', { email });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    // Set session for admin or staff roles only
     if (['admin', 'server'].includes(user.role)) {
       req.session.user = { id: user.id, email: user.email, role: user.role };
-      logger.info('User logged in successfully', { userId: user.id, email: user.email, role: user.role });
-      res.json({ message: 'Logged in', user: req.session.user });
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Session save error during login', { error: err.message, email });
+          return res.status(500).json({ error: 'Failed to login' });
+        }
+        logger.info('Session saved for login', { sessionID: req.sessionID, userId: user.id });
+        res.json({ message: 'Logged in', user: req.session.user });
+      });
     } else {
       logger.warn('Login denied: Non-admin/staff role', { email, role: user.role });
       res.status(403).json({ error: 'Only admin or staff can log in' });
@@ -107,11 +112,6 @@ router.put('/users/:id', async (req, res) => {
     if (role !== 'server' && role !== 'admin') {
       logger.warn('Invalid role', { role });
       return res.status(400).json({ error: 'Invalid role' });
-    }
-    const [existing] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
-    if (existing.length === 0) {
-      logger.warn('User not found', { id: userId });
-      return res.status(404).json({ error: 'User not found' });
     }
     const updates = [];
     const values = [];
