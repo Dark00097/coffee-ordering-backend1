@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']),
+  ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:5173', 'https://offee-ordering-frontend1-production.up.railway.app']), 
 ];
 
 console.log('Allowed Origins:', allowedOrigins);
@@ -29,7 +29,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id', 'Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'], // Removed 'x-session-id' as it's not used
   exposedHeaders: ['Set-Cookie'],
   optionsSuccessStatus: 200,
 };
@@ -71,11 +71,21 @@ app.use(
     cookie: {
       maxAge: 86400000,
       httpOnly: true,
-      secure: true, // Always secure on Railway
-      sameSite: 'none', // Always 'none' for cross-origin
+      secure: true,
+      sameSite: 'none',
     },
   })
 );
+
+// Debug middleware to log session and cookie details
+app.use((req, res, next) => {
+  logger.info('Session debug', {
+    sessionID: req.sessionID,
+    sessionUser: req.session.user || 'none',
+    cookies: req.headers.cookie || 'none',
+  });
+  next();
+});
 
 app.use((req, res, next) => {
   logger.info('Incoming request', {
